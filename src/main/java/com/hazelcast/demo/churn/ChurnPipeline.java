@@ -16,6 +16,7 @@ import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Util;
 import com.hazelcast.jet.datamodel.Tuple2;
+import com.hazelcast.jet.datamodel.Tuple3;
 import com.hazelcast.jet.pipeline.ContextFactory;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
@@ -77,10 +78,10 @@ public class ChurnPipeline {
 					 (tuple, item) -> { 
 						 CompletableFuture<CustomerUsageDetails> future1 =  Util.toCompletableFuture(tuple.f0().getAsync(item.f0()));
 						 CompletableFuture<ContractInfo> future2 =  Util.toCompletableFuture(tuple.f1().getAsync(item.f0()));
-						 return CompletableFuture.allOf(future1,future2).thenApply( x -> Tuple2.tuple2(future1.join(),future2.join()));
-					 })
+						 return CompletableFuture.allOf(future1,future2).thenApply( x -> Tuple3.tuple3(future1.join(),future2.join(),item.f1()) );
+					 }) // (CustomerUsageDetails,ContractInfo, filename)
 			.filter( item -> item.f0()!= null && item.f1() != null)
-			.mapUsingContext(scoringContextFactory,(scoringContext, item) -> scoringContext.predictChurn(item.f1(), item.f0()) )
+			.mapUsingContext(scoringContextFactory,(scoringContext, item) -> Tuple2.tuple2(scoringContext.predictChurn(item.f1(), item.f0()),item.f2() ))
 			.drainTo(Sinks.logger());
 		
 		return result;
