@@ -35,6 +35,7 @@ public class ChurnPipeline {
 	private static HazelcastInstance hz;
 	
 	private static String CALL_DATA_MAP = "call-data";
+	private static String BATCH_SUMMARY_MAP = "batch-summary";
 	
 	//
 	// This main is for testing
@@ -80,8 +81,8 @@ public class ChurnPipeline {
 						 CompletableFuture<ContractInfo> future2 =  Util.toCompletableFuture(tuple.f1().getAsync(item.f0()));
 						 return CompletableFuture.allOf(future1,future2).thenApply( x -> Tuple3.tuple3(future1.join(),future2.join(),item.f1()) );
 					 }) // (CustomerUsageDetails,ContractInfo, filename)
-			.filter( item -> item.f0()!= null && item.f1() != null)
-			.mapUsingContext(scoringContextFactory,(scoringContext, item) -> Tuple2.tuple2(scoringContext.predictChurn(item.f1(), item.f0()),item.f2() ))
+			.filter( item -> item.f0()!= null && item.f1() != null)    //filter out entries where either is null
+			.mapUsingContext(scoringContextFactory,(scoringContext, item) -> Tuple2.tuple2(scoringContext.predictChurn(item.f1(), item.f0()),item.f2() ))  // (KMesg, filename)
 			.drainTo(Sinks.logger());
 		
 		return result;
