@@ -1,17 +1,16 @@
 package com.rlab.entity;
 
 import java.io.Serializable;
+import java.util.Map;
 
 public class BatchSummary implements Serializable {
 	private String batchId;
-	private String batchSize;
-	private float p0;
-	private float p1;
-	private int n0;
-	private int n1;
-	private int noOffers;
+	private int batchSize;  //count 
+	private int n0;  //num no churn predictions 
+	private int noOffers;  
 	private int giftOffers;
 	private int discountOffers;
+	
 	
 	public String getBatchId() {
 		return batchId;
@@ -19,35 +18,20 @@ public class BatchSummary implements Serializable {
 	public void setBatchId(String batchId) {
 		this.batchId = batchId;
 	}
-	public String getBatchSize() {
+	public int getBatchSize() {
 		return batchSize;
 	}
-	public void setBatchSize(String batchSize) {
+	public void setBatchSize(int batchSize) {
 		this.batchSize = batchSize;
 	}
-	public float getP0() {
-		return p0;
-	}
-	public void setP0(float p0) {
-		this.p0 = p0;
-	}
-	public float getP1() {
-		return p1;
-	}
-	public void setP1(float p1) {
-		this.p1 = p1;
-	}
 	public int getN0() {
-		return n0;
+		return n0;   //sum of Resiult = 0
 	}
 	public void setN0(int n0) {
 		this.n0 = n0;
 	}
 	public int getN1() {
-		return n1;
-	}
-	public void setN1(int n1) {
-		this.n1 = n1;
+		return batchSize - n0;
 	}
 	public int getNoOffers() {
 		return noOffers;
@@ -69,5 +53,19 @@ public class BatchSummary implements Serializable {
 	}
 	
 	
+	
+	
+	@Override
+	public String toString() {
+		return "BatchSummary [batchId=" + batchId + ", batchSize=" + batchSize + ", n0=" + n0 + ", noOffers=" + noOffers
+				+ ", giftOffers=" + giftOffers + ", discountOffers=" + discountOffers + "]";
+	}
+	public static BatchSummary  newBatchSummary(String batchName, Long batchSize, Long zeroCount) {
+		BatchSummary result = new BatchSummary();
+		result.setBatchId(batchName);
+		result.setBatchSize( (int)(long) batchSize);
+		result.setN0((int) (long)zeroCount);
+		return result;
+	}
 	
 }

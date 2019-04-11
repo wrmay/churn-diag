@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
 
 import org.apache.log4j.LogManager;
@@ -15,14 +16,18 @@ import com.hazelcast.jet.IMapJet;
 import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Util;
+import com.hazelcast.jet.aggregate.AggregateOperation1;
+import com.hazelcast.jet.aggregate.AggregateOperations;
 import com.hazelcast.jet.datamodel.Tuple2;
 import com.hazelcast.jet.datamodel.Tuple3;
 import com.hazelcast.jet.pipeline.ContextFactory;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
+import com.rlab.entity.BatchSummary;
 import com.rlab.entity.ContractInfo;
 import com.rlab.entity.CustomerUsageDetails;
+import com.rlab.kafka.message.KMessage;
 
 public class ChurnPipeline {
 
@@ -45,6 +50,7 @@ public class ChurnPipeline {
 		hz = jet.getHazelcastInstance();
 		callDataMap = hz.getMap(CALL_DATA_MAP);
 		contractInfoMap = hz.getMap(CONTRACT_INFO);
+		IMap<String,BatchSummary> bsMap = hz.getMap("batch_summary");
 		
 		try {
 			loadCustomerUsage();
@@ -58,6 +64,11 @@ public class ChurnPipeline {
 		
         try {
             jet.newJob(pipeline).join();
+            
+            for(Entry<String,BatchSummary> k: bsMap.entrySet()) {
+            	System.out.println("key=" + k.getKey() + "  val=" + k.getValue());
+            }
+            
         } finally {
             Jet.shutdownAll();
         }
@@ -72,6 +83,17 @@ public class ChurnPipeline {
 		
 		ContextFactory<ScoringContext> scoringContextFactory = ContextFactory.withCreateFn(jet -> new ScoringContext());
 		
+		AggregateOperation1<Tuple2<KMessage,String>,?,BatchSummary> aggregateOp =  AggregateOperations.allOf(
+				AggregateOperations.mapping(item -> item.f1(), AggregateOperations.pickAny()),
+				AggregateOperations.counting() ,  // items in group
+				Utils.filtering( item -> item.f0().getAttributes().get("Result").equals("0"), AggregateOperations.counting()),
+				BatchSummary::newBatchSummary
+			   ); //mapper  
+		
+		// note: if you are using grouping the output of an aggregate is Entry<K,V>, NOT V
+		
+		Entry<String,BatchSummary> thing = Util.entry("bob", new BatchSummary());
+		
 		result.drawFrom(Sources.filesBuilder("batch_input").build( (filename,line) -> line + "," + filename  ))
 			.map(phoneNumber -> phoneNumber.split(","))
 			.map(array -> Tuple2.tuple2(CustomerUsageDetails.createKey(array[0], array[1]), array[2]) )  // (key, filename)
@@ -83,7 +105,12 @@ public class ChurnPipeline {
 					 }) // (CustomerUsageDetails,ContractInfo, filename)
 			.filter( item -> item.f0()!= null && item.f1() != null)    //filter out entries where either is null
 			.mapUsingContext(scoringContextFactory,(scoringContext, item) -> Tuple2.tuple2(scoringContext.predictChurn(item.f1(), item.f0()),item.f2() ))  // (KMesg, filename)
-			.drainTo(Sinks.logger());
+			.groupingKey(item -> item.f1())
+			.aggregate(aggregateOp)  // BatchSummary by batch 
+			.drainTo(Sinks.map("batch_summary"));
+					
+					
+		//	.drainTo(Sinks.logger());
 		
 		return result;
 	}
