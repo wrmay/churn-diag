@@ -70,13 +70,13 @@ public class ChurnPipeline {
 		
 		ContextFactory<ScoringContext> scoringContextFactory = ContextFactory.withCreateFn(jet -> new ScoringContext());
 		
-		result.drawFrom(Sources.files("batch_input"))
+		result.drawFrom(Sources.filesBuilder("batch_input").build( (filename,line) -> line + "," + filename  ))
 			.map(phoneNumber -> phoneNumber.split(","))
-			.map(array -> CustomerUsageDetails.createKey(array[0], array[1]))
+			.map(array -> Tuple2.tuple2(CustomerUsageDetails.createKey(array[0], array[1]), array[2]) )  // (key, filename)
 			.mapUsingContextAsync(contextFactory,
 					 (tuple, item) -> { 
-						 CompletableFuture<CustomerUsageDetails> future1 =  Util.toCompletableFuture(tuple.f0().getAsync(item));
-						 CompletableFuture<ContractInfo> future2 =  Util.toCompletableFuture(tuple.f1().getAsync(item));
+						 CompletableFuture<CustomerUsageDetails> future1 =  Util.toCompletableFuture(tuple.f0().getAsync(item.f0()));
+						 CompletableFuture<ContractInfo> future2 =  Util.toCompletableFuture(tuple.f1().getAsync(item.f0()));
 						 return CompletableFuture.allOf(future1,future2).thenApply( x -> Tuple2.tuple2(future1.join(),future2.join()));
 					 })
 			.filter( item -> item.f0()!= null && item.f1() != null)
