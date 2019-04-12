@@ -24,6 +24,7 @@ import com.hazelcast.jet.pipeline.ContextFactory;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
+import com.hazelcast.jet.pipeline.StreamStage;
 import com.rlab.entity.BatchSummary;
 import com.rlab.entity.ContractInfo;
 import com.rlab.entity.CustomerUsageDetails;
@@ -94,7 +95,8 @@ public class ChurnPipeline {
 		
 		Entry<String,BatchSummary> thing = Util.entry("bob", new BatchSummary());
 		
-		result.drawFrom(Sources.filesBuilder("batch_input").build( (filename,line) -> line + "," + filename  ))
+		StreamStage<Entry<String,BatchSummary>> stage = result.drawFrom(Sources.filesBuilder("batch_input").buildWatcher( (filename,line) -> line + "," + filename  ))
+			.withoutTimestamps()
 			.map(phoneNumber -> phoneNumber.split(","))
 			.map(array -> Tuple2.tuple2(CustomerUsageDetails.createKey(array[0], array[1]), array[2]) )  // (key, filename)
 			.mapUsingContextAsync(contextFactory,
@@ -106,8 +108,9 @@ public class ChurnPipeline {
 			.filter( item -> item.f0()!= null && item.f1() != null)    //filter out entries where either is null
 			.mapUsingContext(scoringContextFactory,(scoringContext, item) -> Tuple2.tuple2(scoringContext.predictChurn(item.f1(), item.f0()),item.f2() ))  // (KMesg, filename)
 			.groupingKey(item -> item.f1())
-			.aggregate(aggregateOp)  // BatchSummary by batch 
-			.drainTo(Sinks.map("batch_summary"));
+			.rollingAggregate(aggregateOp); 
+			stage.drainTo(Sinks.logger());
+			stage.drainTo(Sinks.map("batch_summary"));
 					
 					
 		//	.drainTo(Sinks.logger());
