@@ -5,9 +5,13 @@
 <network>
         <join>
             <multicast enabled="false"/>
+            	<tcp-ip enabled="true">
+            <interface>127.0.0.1</interface>
+            </tcp-ip>            
         </join>
     </network>
 
     
 <!--   <management-center enabled="true">http://localhost:8080/hazelcast-mancenter</management-center> 
- --></hazelcast>
+ -->
+ </hazelcast>

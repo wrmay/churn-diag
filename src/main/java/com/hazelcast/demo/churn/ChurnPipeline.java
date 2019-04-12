@@ -114,11 +114,11 @@ public class ChurnPipeline {
 		// note: if you are using grouping the output of an aggregate is Entry<K,V>, NOT
 		// V
 
-		result.drawFrom(Sources.filesBuilder("batch_input").build((filename, line) -> line + "," + filename))
-				.map(phoneNumber -> phoneNumber.split(","))
-				.map(array -> Tuple2.tuple2(CustomerUsageDetails.createKey(array[0], array[1]), array[2])) // (key,
-																											// filename)
-				.mapUsingContextAsync(contextFactory, (tuple, item) -> {
+		result.drawFrom(Sources.filesBuilder("batch_input").buildWatcher((filename, line) -> line + "," + filename))
+			.withoutTimestamps()
+			.map(phoneNumber -> phoneNumber.split(","))
+			.map(array -> Tuple2.tuple2(CustomerUsageDetails.createKey(array[0], array[1]), array[2])) // (key, filename)																										
+			.mapUsingContextAsync(contextFactory, (tuple, item) -> {
 					CompletableFuture<CustomerUsageDetails> future1 = Util
 							.toCompletableFuture(tuple.f0().getAsync(item.f0()));
 					CompletableFuture<ContractInfo> future2 = Util.toCompletableFuture(tuple.f1().getAsync(item.f0()));
@@ -129,7 +129,7 @@ public class ChurnPipeline {
 				.mapUsingContext(scoringContextFactory,
 						(scoringContext, item) -> Tuple2.tuple2(scoringContext.predictChurn(item.f1(), item.f0()),
 								item.f2())) // (KMesg, filename)
-				.groupingKey(item -> item.f1()).aggregate(aggregateOp) // BatchSummary by batch
+				.groupingKey(item -> item.f1()).rollingAggregate(aggregateOp) // BatchSummary by batch
 				.drainTo(Sinks.remoteMap("batch_summary", cc));
 
 		// .drainTo(Sinks.logger());
