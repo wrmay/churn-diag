@@ -116,7 +116,7 @@ public class ChurnPipeline {
 		// V
 
 		StreamStage<Entry<String, BatchSummary>> stage = 
-		result.drawFrom(Sources.filesBuilder("batch_input").buildWatcher((filename, line) -> line + "," + filename))
+		result.drawFrom(Sources.filesBuilder("batch_input").buildWatcher((filename, line) -> line + "," + filename.substring(0,filename.length() -4)))
 			.withoutTimestamps()
 			.map(phoneNumber -> phoneNumber.split(","))
 			.map(array -> Tuple2.tuple2(CustomerUsageDetails.createKey(array[0], array[1]), array[2])) // (key, filename)																										
