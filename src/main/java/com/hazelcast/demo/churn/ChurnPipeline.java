@@ -14,7 +14,6 @@ import com.hazelcast.client.HazelcastClient;
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.IMap;
-import com.hazelcast.jet.IMapJet;
 import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Util;
@@ -26,6 +25,8 @@ import com.hazelcast.jet.pipeline.ContextFactory;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
+import com.hazelcast.jet.pipeline.StreamStage;
+import com.hazelcast.jet.pipeline.StreamStageWithKey;
 import com.rlab.entity.BatchSummary;
 import com.rlab.entity.ContractInfo;
 import com.rlab.entity.CustomerUsageDetails;
@@ -114,6 +115,7 @@ public class ChurnPipeline {
 		// note: if you are using grouping the output of an aggregate is Entry<K,V>, NOT
 		// V
 
+		StreamStage<Entry<String, BatchSummary>> stage = 
 		result.drawFrom(Sources.filesBuilder("batch_input").buildWatcher((filename, line) -> line + "," + filename))
 			.withoutTimestamps()
 			.map(phoneNumber -> phoneNumber.split(","))
@@ -129,10 +131,11 @@ public class ChurnPipeline {
 				.mapUsingContext(scoringContextFactory,
 						(scoringContext, item) -> Tuple2.tuple2(scoringContext.predictChurn(item.f1(), item.f0()),
 								item.f2())) // (KMesg, filename)
-				.groupingKey(item -> item.f1()).rollingAggregate(aggregateOp) // BatchSummary by batch
-				.drainTo(Sinks.remoteMap("batch_summary", cc));
+				.groupingKey(item -> item.f1()).rollingAggregate(aggregateOp); // BatchSummary by batch
+			
+		stage.drainTo(Sinks.remoteMap("batch_summary", cc));
+		stage.drainTo(Sinks.logger());
 
-		// .drainTo(Sinks.logger());
 
 		return result;
 	}
